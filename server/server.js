@@ -16,7 +16,7 @@ const SCORES_FILE = path.join(DATA_DIR, 'scores.json');
 
 const app = express();
 const server = http.createServer(app);
-const PORT = process.env.SERVER_PORT || 3001;
+const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 
 // ==============================================================================
 // 1. SEGURIDAD HTTP & SANITIZACIÓN
@@ -184,7 +184,20 @@ app.post('/api/score', (req, res) => {
 });
 
 // ==============================================================================
-// 4. WEBSOCKET SERVER & ROOM STATE MACHINE
+// 4. STATIC FRONTEND SERVING (Monolito Fullstack)
+// ==============================================================================
+
+const DIST_DIR = path.resolve(__dirname, '../dist');
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+}
+
+// ==============================================================================
+// 5. WEBSOCKET SERVER & ROOM STATE MACHINE
 // ==============================================================================
 
 const wss = new WebSocketServer({ server });
