@@ -1,0 +1,32 @@
+{
+  "name": "Homer Bird • Springfield Arcade",
+  "short_name": "Homer Bird",
+  "description": "Simulación 2D de Flappy Bird al estilo arcade de Springfield con Homero Simpson.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#0d131f",
+  "theme_color": "#0d131f",
+  "orientation": "portrait",
+  "categories": ["games", "arcade"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

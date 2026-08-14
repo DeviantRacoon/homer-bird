@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Homer Bird" />
+    <meta name="theme-color" content="#0d131f" />
+    <title>Homer Bird • Springfield Arcade</title>
+    
+    <!-- PWA Manifest & Multi-size Icons -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Press+Start+2P&family=Chivo+Mono:wght@700;900&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <!-- Top Player Profile & Hub Bar (Mobile & Desktop) -->
+    <nav id="player-profile-bar">
+      <!-- Mobile Quick Menu Button -->
+      <button id="open-mobile-hub-btn" class="mobile-hub-trigger" title="Menú Sector 7-G">
+        <span class="hub-icon">🎮</span>
+        <span class="hub-label">SISTEMA</span>
+      </button>
+
+      <div class="player-badge" id="open-profile-btn" role="button" tabindex="0">
+        <img class="badge-logo-img" src="/icons/favicon-32x32.png" alt="Homer" />
+        <div class="badge-info">
+          <span class="badge-label">EMPLEADO SECTOR 7-G</span>
+          <strong id="display-nickname">Cargando...</strong>
+        </div>
+        <span class="edit-icon">✏️</span>
+      </div>
+    </nav>
+
+    <div id="arcade-cabinet-layout">
+      <!-- Arcade Screen Bezel -->
+      <div id="cabinet-housing">
+        <header class="cabinet-marquee">
+          <span class="marquee-title">HOMER BIRD</span>
+          <span class="marquee-sub">SPRINGFIELD SECTOR 7-G</span>
+        </header>
+
+        <section id="game-frame">
+          <div id="game-container"></div>
+          <div class="crt-scanlines" aria-hidden="true"></div>
+        </section>
+
+        <footer class="cabinet-coin-slot">
+          <div class="insert-coin"><span id="cabinet-mode-tag">🕹️ SOLO</span> • <span>ONLINE</span></div>
+        </footer>
+      </div>
+
+      <!-- Sector 7-G Industrial Control Dashboard (Desktop Only) -->
+      <aside id="sector7g-panel">
+        <header class="station-header">
+          <div class="hazard-stripe"></div>
+          <div class="station-identity">
+            <span class="plant-code">SNPP • SECTOR 7-G</span>
+            <h2>REACTOR MONITOR</h2>
+          </div>
+        </header>
+
+        <!-- Game Mode Selector -->
+        <div class="mode-selector-module">
+          <span class="module-title">MODO DE JUEGO</span>
+          <div class="mode-buttons-group">
+            <button class="btn-mode active" data-mode="single" id="mode-btn-single">🕹️ MODO SOLO</button>
+            <button class="btn-mode" data-mode="multiplayer" id="mode-btn-multi">🌐 MULTIJUGADOR</button>
+          </div>
+        </div>
+
+        <!-- Telemetry Gauges -->
+        <div class="telemetry-grid">
+          <div class="gauge-card">
+            <span class="gauge-label">PUNTUACIÓN</span>
+            <div class="led-display" id="dash-current-score">0</div>
+          </div>
+          <div class="gauge-card highlight">
+            <span class="gauge-label">RÉCORD MÁXIMO</span>
+            <div class="led-display" id="dash-best-score">0</div>
+          </div>
+        </div>
+
+        <!-- Meltdown Reactor Status -->
+        <div class="meltdown-module">
+          <div class="meltdown-header">
+            <span class="module-title">ESTADO DEL NÚCLEO</span>
+            <span id="dash-danger-level" class="status-badge status-green">ESTABLE</span>
+          </div>
+          <div class="meter-track">
+            <div id="dash-danger-bar" class="meter-fill"></div>
+          </div>
+        </div>
+
+        <!-- Multiplayer Room Module (Active when multiplayer mode is on) -->
+        <div class="multi-module" id="multi-card-module" style="display: none;">
+          <div class="multi-header">
+            <span class="module-title">🌐 SALAS MULTIJUGADOR</span>
+            <button id="refresh-rooms-btn" class="btn-ghost-select" title="Actualizar salas">🔄 REFRESCAR</button>
+          </div>
+          
+          <div class="multi-room-controls">
+            <input type="text" id="room-code-input" maxlength="12" placeholder="CÓDIGO (ej. DONA)" value="SPRINGFIELD" />
+            <button id="join-room-btn" class="btn-join-room">ENTRAR</button>
+          </div>
+
+          <!-- Live Rooms Directory -->
+          <div class="rooms-list-box" id="rooms-list-container">
+            <div class="lb-loading">Buscando salas activas...</div>
+          </div>
+        </div>
+
+        <!-- Global Leaderboard Module -->
+        <div class="leaderboard-module">
+          <div class="lb-header">
+            <span class="module-title">🏆 RANKING MUNDIAL</span>
+            <div class="lb-tabs">
+              <button class="lb-tab active" id="tab-alltime">HISTÓRICO</button>
+              <button class="lb-tab" id="tab-today">HOY</button>
+            </div>
+          </div>
+          <div class="lb-list-container" id="leaderboard-list">
+            <div class="lb-loading">Cargando puntuaciones...</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Nickname Customization Modal -->
+    <dialog id="profile-modal">
+      <div class="modal-card">
+        <div class="hazard-stripe"></div>
+        <div class="modal-body">
+          <span class="modal-pre">PLANTA NUCLEAR DE SPRINGFIELD</span>
+          <h3>CREDENCIAL DE EMPLEADO</h3>
+          <p class="modal-desc">Ingresa el nombre con el que aparecerás en el ranking y multijugador:</p>
+          
+          <div class="input-group">
+            <input type="text" id="nickname-input" maxlength="16" placeholder="Tu Nickname..." autocomplete="off" />
+            <button id="random-nick-btn" type="button" title="Nombre aleatorio">🎲</button>
+          </div>
+
+          <div class="modal-actions">
+            <button id="save-profile-btn" class="btn-primary">CONFIRMAR</button>
+            <button id="close-profile-btn" class="btn-secondary">CANCELAR</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Mobile Arcade Hub (Lobby, Modos, Salas y Ranking para Móviles) -->
+    <dialog id="mobile-arcade-hub-modal">
+      <div class="modal-card mobile-hub-sheet">
+        <div class="hazard-stripe"></div>
+        <div class="modal-body">
+          <header class="mobile-hub-header">
+            <div>
+              <span class="modal-pre">SECTOR 7-G • TERMINAL MÓVIL</span>
+              <h3>CENTRAL DE CONTROL</h3>
+            </div>
+            <button id="close-mobile-hub-btn" class="btn-close-hub" aria-label="Cerrar">✕</button>
+          </header>
+
+          <!-- Mode Selector Mobile -->
+          <div class="mode-selector-module">
+            <span class="module-title">MODO DE JUEGO</span>
+            <div class="mode-buttons-group">
+              <button class="btn-mode active mobile-mode-btn" data-mode="single" id="mob-btn-single">🕹️ MODO SOLO</button>
+              <button class="btn-mode mobile-mode-btn" data-mode="multiplayer" id="mob-btn-multi">🌐 MULTIJUGADOR</button>
+            </div>
+          </div>
+
+          <!-- Mobile Multiplayer Panel -->
+          <div class="multi-module" id="mob-multi-card-module" style="display: none;">
+            <div class="multi-header">
+              <span class="module-title">🌐 SALAS MULTIJUGADOR</span>
+              <button id="mob-refresh-rooms-btn" class="btn-ghost-select">🔄 REFRESCAR</button>
+            </div>
+            
+            <div class="multi-room-controls">
+              <input type="text" id="mob-room-code-input" maxlength="12" placeholder="CÓDIGO SALA" value="SPRINGFIELD" />
+              <button id="mob-join-room-btn" class="btn-join-room">ENTRAR</button>
+            </div>
+
+            <div class="rooms-list-box" id="mob-rooms-list-container">
+              <div class="lb-loading">Buscando salas activas...</div>
+            </div>
+          </div>
+
+          <!-- Mobile Global Leaderboard -->
+          <div class="leaderboard-module">
+            <div class="lb-header">
+              <span class="module-title">🏆 RANKING MUNDIAL</span>
+              <div class="lb-tabs">
+                <button class="lb-tab active" id="mob-tab-alltime">HISTÓRICO</button>
+                <button class="lb-tab" id="mob-tab-today">HOY</button>
+              </div>
+            </div>
+            <div class="lb-list-container" id="mob-leaderboard-list">
+              <div class="lb-loading">Cargando puntuaciones...</div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button id="mob-play-now-btn" class="btn-primary" style="padding: 12px; font-size: 0.95rem;">🚀 ¡A JUGAR!</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

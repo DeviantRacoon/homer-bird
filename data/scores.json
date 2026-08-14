@@ -1,0 +1,86 @@
+[
+  {
+    "id": "seed-1",
+    "nickname": "Sr. Burns",
+    "score": 48,
+    "timestamp": 1786492669123
+  },
+  {
+    "id": "seed-2",
+    "nickname": "Cosme Fulanito",
+    "score": 35,
+    "timestamp": 1786647469123
+  },
+  {
+    "id": "seed-3",
+    "nickname": "Ned Flanders",
+    "score": 28,
+    "timestamp": 1786658269123
+  },
+  {
+    "id": "seed-4",
+    "nickname": "Bart Simpson",
+    "score": 24,
+    "timestamp": 1786663669123
+  },
+  {
+    "id": "seed-5",
+    "nickname": "Moe Szyslak",
+    "score": 19,
+    "timestamp": 1786658269123
+  },
+  {
+    "id": "seed-6",
+    "nickname": "Barney Gumble",
+    "score": 14,
+    "timestamp": 1786661869123
+  },
+  {
+    "id": "seed-7",
+    "nickname": "Milhouse V.",
+    "score": 9,
+    "timestamp": 1786664569123
+  },
+  {
+    "id": "seed-8",
+    "nickname": "Rafa Gorgory",
+    "score": 4,
+    "timestamp": 1786664869123
+  },
+  {
+    "id": "score-1786665749527-wq7cx",
+    "nickname": "Peligro Nuclear ",
+    "score": 16,
+    "timestamp": 1786665749527
+  },
+  {
+    "id": "score-1786665966457-5o2jg",
+    "nickname": "Peligro Nuclear ",
+    "score": 2,
+    "timestamp": 1786665966457
+  },
+  {
+    "id": "score-1786665981955-82kmy",
+    "nickname": "Peligro Nuclear ",
+    "score": 4,
+    "timestamp": 1786665981955
+  },
+  {
+    "id": "score-1786666053132-0uwiz",
+    "nickname": "Peligro Nuclear ",
+    "score": 25,
+    "timestamp": 1786666053132
+  },
+  {
+    "id": "score-1786666314276-4nf6l",
+    "nickname": "Peligro Nuclear ",
+    "score": 4,
+    "timestamp": 1786666314276
+  },
+  {
+    "id": "score-1786666550918-zcxr2",
+    "nickname": "Peligro Nuclear ",
+    "score": 3,
+    "timestamp": 1786666550918
+  }
+]
