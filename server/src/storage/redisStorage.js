@@ -125,9 +125,11 @@ export class StorageManager {
         console.log(`📦 [Redis] Migrando ${this.localScores.length} puntuaciones locales a Redis Sorted Sets...`);
         const pipeline = this.redis.pipeline();
         for (const s of this.localScores) {
-          pipeline.zadd('leaderboard:all_time', s.score, s.id);
-          pipeline.hset(`score:${s.id}`, {
-            id: s.id,
+          const memberKey = (s.nickname || '').trim().toLowerCase();
+          if (!memberKey) continue;
+          pipeline.zadd('leaderboard:all_time', s.score, memberKey);
+          pipeline.hset(`player:${memberKey}`, {
+            id: memberKey,
             nickname: s.nickname,
             score: s.score.toString(),
             timestamp: s.timestamp.toString()
@@ -142,7 +144,7 @@ export class StorageManager {
   }
 
   // ============================================================================
-  // 3. OBTENER LEADERBOARD (REDIS / FALLBACK)
+  // 3. OBTENER LEADERBOARD (REDIS / FALLBACK CON UNICIDAD DE JUGADOR)
   // ============================================================================
 
   async getLeaderboard(limit = 15) {
@@ -151,16 +153,40 @@ export class StorageManager {
         const todayKey = this.getTodayKey();
         
         // 1. Top Histórico con ZREVRANGE
-        const allTimeIds = await this.redis.zrevrange('leaderboard:all_time', 0, limit - 1);
-        const allTime = await this.fetchScoresMetadata(allTimeIds);
+        const allTimeMembers = await this.redis.zrevrange('leaderboard:all_time', 0, limit - 1);
+        let allTime = [];
+        if (allTimeMembers.length > 0) {
+          const pipeAll = this.redis.pipeline();
+          allTimeMembers.forEach(m => pipeAll.hgetall(`player:${m}`));
+          const allResults = await pipeAll.exec();
+          allTime = allResults.map(([err, data], idx) => {
+            if (err || !data || !data.nickname) return null;
+            return {
+              id: data.id || `p-${allTimeMembers[idx]}`,
+              nickname: data.nickname,
+              score: parseInt(data.score, 10),
+              timestamp: parseInt(data.timestamp, 10) || Date.now()
+            };
+          }).filter(Boolean);
+        }
 
-        // 2. Top de Hoy con ZREVRANGE
-        const todayIds = await this.redis.zrevrange(todayKey, 0, limit - 1);
+        // 2. Top Hoy con ZREVRANGE
+        const todayMembers = await this.redis.zrevrange(todayKey, 0, limit - 1);
         let today = [];
-        if (todayIds.length > 0) {
-          today = await this.fetchScoresMetadata(todayIds);
+        if (todayMembers.length > 0) {
+          const pipeToday = this.redis.pipeline();
+          todayMembers.forEach(m => pipeToday.hgetall(`player_today:${todayKey}:${m}`));
+          const todayResults = await pipeToday.exec();
+          today = todayResults.map(([err, data], idx) => {
+            if (err || !data || !data.nickname) return null;
+            return {
+              id: data.id || `pt-${todayMembers[idx]}`,
+              nickname: data.nickname,
+              score: parseInt(data.score, 10),
+              timestamp: parseInt(data.timestamp, 10) || Date.now()
+            };
+          }).filter(Boolean);
         } else {
-          // Si no hay datos en la clave del día, filtramos de las últimas 24h
           const oneDayMs = 24 * 60 * 60 * 1000;
           const now = Date.now();
           today = allTime.filter(s => now - s.timestamp < oneDayMs);
@@ -180,15 +206,26 @@ export class StorageManager {
       }
     }
 
-    // Fallback Local
+    // Fallback Local (JSON) con unicidad por jugador
+    const uniqueMap = new Map();
+    this.localScores.forEach(s => {
+      const key = (s.nickname || '').trim().toLowerCase();
+      if (!key) return;
+      const existing = uniqueMap.get(key);
+      if (!existing || s.score > existing.score) {
+        uniqueMap.set(key, s);
+      }
+    });
+
+    const uniqueScores = Array.from(uniqueMap.values());
     const now = Date.now();
     const oneDayMs = 24 * 60 * 60 * 1000;
 
-    const allTime = [...this.localScores]
+    const allTime = [...uniqueScores]
       .sort((a, b) => b.score - a.score || a.timestamp - b.timestamp)
       .slice(0, limit);
 
-    const today = [...this.localScores]
+    const today = [...uniqueScores]
       .filter(s => now - s.timestamp < oneDayMs)
       .sort((a, b) => b.score - a.score || a.timestamp - b.timestamp)
       .slice(0, limit);
@@ -197,72 +234,71 @@ export class StorageManager {
       success: true,
       allTime,
       today,
-      totalPlayers: this.localScores.length,
+      totalPlayers: uniqueScores.length,
       driver: 'json'
     };
   }
 
-  async fetchScoresMetadata(ids) {
-    if (!ids || ids.length === 0) return [];
-    const pipeline = this.redis.pipeline();
-    ids.forEach(id => pipeline.hgetall(`score:${id}`));
-    const results = await pipeline.exec();
-
-    return results
-      .map(([err, data]) => {
-        if (err || !data || !data.id) return null;
-        return {
-          id: data.id,
-          nickname: data.nickname,
-          score: parseInt(data.score, 10),
-          timestamp: parseInt(data.timestamp, 10)
-        };
-      })
-      .filter(Boolean);
-  }
-
   // ============================================================================
-  // 4. GUARDAR PUNTUACIÓN (REDIS / FALLBACK)
+  // 4. GUARDAR PUNTUACIÓN (REDIS / FALLBACK CON RÉCORD ÚNICO POR JUGADOR)
   // ============================================================================
 
   async saveScore({ nickname, score, durationMs }) {
+    const cleanNick = (nickname || 'Homero').trim().slice(0, 16) || 'Homero';
+    const memberKey = cleanNick.toLowerCase();
+    const now = Date.now();
+
     const entry = {
-      id: `score-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      nickname,
+      id: memberKey,
+      nickname: cleanNick,
       score,
-      timestamp: Date.now()
+      timestamp: now
     };
 
     if (this.isConnected && this.redis) {
       try {
         const todayKey = this.getTodayKey();
-        const pipeline = this.redis.pipeline();
+        
+        // 1. Guardar en Sorted Set global si supera el récord histórico
+        const prevAllTime = await this.redis.zscore('leaderboard:all_time', memberKey);
+        const prevAllScore = prevAllTime !== null ? parseInt(prevAllTime, 10) : -1;
 
-        // 1. Guardar en Sorted Set global
-        pipeline.zadd('leaderboard:all_time', score, entry.id);
+        if (score >= prevAllScore) {
+          const pipeAll = this.redis.pipeline();
+          pipeAll.zadd('leaderboard:all_time', score, memberKey);
+          pipeAll.hset(`player:${memberKey}`, {
+            id: memberKey,
+            nickname: cleanNick,
+            score: score.toString(),
+            timestamp: now.toString(),
+            durationMs: (durationMs || 0).toString()
+          });
+          await pipeAll.exec();
+        }
 
-        // 2. Guardar en Sorted Set diario con TTL de 48 horas
-        pipeline.zadd(todayKey, score, entry.id);
-        pipeline.expire(todayKey, 172800); // 48 horas
+        // 2. Guardar en Sorted Set de Hoy si supera el récord del día
+        const prevToday = await this.redis.zscore(todayKey, memberKey);
+        const prevTodayScore = prevToday !== null ? parseInt(prevToday, 10) : -1;
 
-        // 3. Guardar hash con detalles
-        pipeline.hset(`score:${entry.id}`, {
-          id: entry.id,
-          nickname: entry.nickname,
-          score: entry.score.toString(),
-          timestamp: entry.timestamp.toString(),
-          durationMs: (durationMs || 0).toString()
-        });
+        if (score >= prevTodayScore) {
+          const pipeToday = this.redis.pipeline();
+          pipeToday.zadd(todayKey, score, memberKey);
+          pipeToday.expire(todayKey, 172800); // 48 horas
+          pipeToday.hset(`player_today:${todayKey}:${memberKey}`, {
+            id: memberKey,
+            nickname: cleanNick,
+            score: score.toString(),
+            timestamp: now.toString()
+          });
+          await pipeToday.exec();
+        }
 
-        await pipeline.exec();
-
-        // 4. Obtener rango exacto con ZREVRANK (0-indexed)
-        const rank0 = await this.redis.zrevrank('leaderboard:all_time', entry.id);
+        // Obtener ranking del jugador
+        const rank0 = await this.redis.zrevrank('leaderboard:all_time', memberKey);
         const rank = (rank0 !== null ? rank0 : 0) + 1;
 
-        // Mantener copia local actualizada en segundo plano
-        this.localScores.push(entry);
-        this.saveLocalScores();
+        // Mantener copia local única
+        this.updateLocalScore(cleanNick, score, now);
 
         return {
           success: true,
@@ -272,24 +308,43 @@ export class StorageManager {
           driver: 'redis'
         };
       } catch (err) {
-        console.warn('⚠️ [Redis] Fallo al guardar en Redis, guardando en fallback local:', err.message);
+        console.warn('⚠️ [Redis] Fallo al guardar en Redis, usando fallback local:', err.message);
       }
     }
 
     // Fallback Local
-    this.localScores.push(entry);
-    this.saveLocalScores();
+    this.updateLocalScore(cleanNick, score, now);
 
     const sorted = [...this.localScores].sort((a, b) => b.score - a.score || a.timestamp - b.timestamp);
-    const rank = sorted.findIndex(s => s.id === entry.id) + 1;
+    const rank = sorted.findIndex(s => s.nickname.toLowerCase() === memberKey) + 1;
 
     return {
       success: true,
       entry,
-      rank,
-      isTop10: rank <= 10,
+      rank: rank > 0 ? rank : 1,
+      isTop10: rank > 0 && rank <= 10,
       driver: 'json'
     };
+  }
+
+  updateLocalScore(nickname, score, timestamp) {
+    const memberKey = nickname.trim().toLowerCase();
+    const existingIdx = this.localScores.findIndex(s => (s.nickname || '').trim().toLowerCase() === memberKey);
+    if (existingIdx >= 0) {
+      if (score >= this.localScores[existingIdx].score) {
+        this.localScores[existingIdx].score = score;
+        this.localScores[existingIdx].timestamp = timestamp;
+        this.localScores[existingIdx].nickname = nickname;
+      }
+    } else {
+      this.localScores.push({
+        id: `p-${memberKey}`,
+        nickname,
+        score,
+        timestamp
+      });
+    }
+    this.saveLocalScores();
   }
 }
 

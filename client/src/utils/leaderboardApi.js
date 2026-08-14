@@ -64,6 +64,8 @@ export function normalizeHttpUrl(url) {
   return clean.replace(/\/+$/, '');
 }
 
+const DEFAULT_PROD_BACKEND = 'https://homer-bird-production.up.railway.app';
+
 export function getApiBaseUrl() {
   const backend = import.meta.env.VITE_BACKEND_URL;
   const apiUrl = import.meta.env.VITE_API_URL;
@@ -78,7 +80,12 @@ export function getApiBaseUrl() {
     return clean.endsWith('/api') || clean.startsWith('/') ? clean : `${clean}/api`;
   }
 
-  return '/api';
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocal) {
+    return 'http://localhost:3001/api';
+  }
+
+  return `${DEFAULT_PROD_BACKEND}/api`;
 }
 
 export async function fetchActiveRooms() {

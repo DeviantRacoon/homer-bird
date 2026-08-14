@@ -54,8 +54,7 @@ class MultiplayerClient {
       if (isLocal) {
         wsUrl = 'ws://localhost:3001';
       } else {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${protocol}//${window.location.host}`;
+        wsUrl = 'wss://homer-bird-production.up.railway.app';
       }
     }
 

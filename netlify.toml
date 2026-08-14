@@ -6,6 +6,15 @@
 [build.environment]
   NODE_VERSION = "20"
   NPM_FLAGS = "--include=dev"
+  VITE_BACKEND_URL = "https://homer-bird-production.up.railway.app"
+  VITE_WS_URL = "wss://homer-bird-production.up.railway.app"
+
+# Proxy de API directo a Railway para peticiones móviles y web
+[[redirects]]
+  from = "/api/*"
+  to = "https://homer-bird-production.up.railway.app/api/:splat"
+  status = 200
+  force = true
 
 # Redirección SPA para soportar rutas del cliente
 [[redirects]]
