@@ -3,18 +3,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copiar dependencias del servidor
-COPY package.json ./
-
-# Instalar dependencias de producción
+# 1. Copiar package.json del backend e instalar dependencias de producción
+COPY server/package.json ./
 RUN npm install --omit=dev
 
-# Copiar código fuente y datos iniciales
-COPY server.js ./
-COPY src/ ./src/
-COPY data/ ./data/
+# 2. Copiar código fuente, módulos y datos
+COPY server/server.js ./
+COPY server/src/ ./src/
+COPY server/data/ ./data/
 
-# Variables por defecto
+# 3. Variables de entorno por defecto
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV DATA_DIRECTORY=/app/data

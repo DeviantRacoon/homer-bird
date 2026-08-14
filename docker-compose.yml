@@ -11,8 +11,8 @@ services:
 
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     container_name: homer_bird_server
     ports:
       - "3001:3001"
