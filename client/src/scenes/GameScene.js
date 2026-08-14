@@ -160,13 +160,28 @@ export class GameScene extends Phaser.Scene {
       },
       onRoomJoined: (msg) => {
         this.rng = createSeededRandom(msg.seed || 12345);
+        // Limpiar peers anteriores
+        this.peerSprites.forEach(p => {
+          if (p.sprite) p.sprite.destroy();
+          if (p.tag) p.tag.destroy();
+        });
+        this.peerSprites.clear();
+
+        if (this.localTag) this.localTag.setVisible(true);
+
         if (msg.players) {
-          msg.players.forEach(p => this.addPeerSprite(p, gameW, gameH));
+          msg.players.forEach(p => {
+            if (p.id !== multiplayer.playerId && p.id !== msg.playerId) {
+              this.addPeerSprite(p, gameW, gameH);
+            }
+          });
         }
         this.updateReadyUI();
       },
       onPlayerJoined: (player) => {
-        this.addPeerSprite(player, gameW, gameH);
+        if (player && player.id !== multiplayer.playerId) {
+          this.addPeerSprite(player, gameW, gameH);
+        }
         this.updateReadyUI();
       },
       onPlayerReady: (msg) => {
@@ -290,6 +305,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   addPeerSprite(player, gameW, gameH) {
+    if (!player || !player.id) return;
+    if (player.id === multiplayer.playerId) return;
     if (this.peerSprites.has(player.id)) return;
 
     const sprite = this.add.sprite(gameW * 0.25, player.y || gameH * 0.45, 'homer', 0);
