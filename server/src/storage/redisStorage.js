@@ -120,26 +120,74 @@ export class StorageManager {
   async syncInitialToRedis() {
     if (!this.isConnected || !this.redis) return;
     try {
-      const count = await this.redis.zcard('leaderboard:all_time');
-      if (count === 0 && this.localScores.length > 0) {
-        console.log(`📦 [Redis] Migrando ${this.localScores.length} puntuaciones locales a Redis Sorted Sets...`);
-        const pipeline = this.redis.pipeline();
-        for (const s of this.localScores) {
-          const memberKey = (s.nickname || '').trim().toLowerCase();
-          if (!memberKey) continue;
-          pipeline.zadd('leaderboard:all_time', s.score, memberKey);
-          pipeline.hset(`player:${memberKey}`, {
-            id: memberKey,
-            nickname: s.nickname,
-            score: s.score.toString(),
-            timestamp: s.timestamp.toString()
-          });
+      console.log('🔄 [Redis] Normalizando y migrando leaderboard a registros únicos...');
+      
+      // 1. Obtener todos los miembros actuales con sus puntuaciones
+      const membersWithScores = await this.redis.zrevrange('leaderboard:all_time', 0, -1, 'WITHSCORES');
+      const existingPlayers = new Map(); // memberKey -> { nickname, score, timestamp }
+
+      // 2. Extraer datos existentes soportando formato nuevo (player:) y legacy (score:)
+      if (membersWithScores.length > 0) {
+        const pipeInspect = this.redis.pipeline();
+        for (let i = 0; i < membersWithScores.length; i += 2) {
+          const m = membersWithScores[i];
+          pipeInspect.hgetall(`player:${m}`);
+          pipeInspect.hgetall(`score:${m}`);
         }
-        await pipeline.exec();
-        console.log('✅ [Redis] Sincronización inicial completada.');
+        const results = await pipeInspect.exec();
+        
+        let resIdx = 0;
+        for (let i = 0; i < membersWithScores.length; i += 2) {
+          const m = membersWithScores[i];
+          const zScore = parseInt(membersWithScores[i + 1], 10) || 0;
+          const [errP, dataP] = results[resIdx++];
+          const [errS, dataS] = results[resIdx++];
+
+          const data = (dataP && dataP.nickname) ? dataP : ((dataS && dataS.nickname) ? dataS : null);
+          const rawNick = data?.nickname || m;
+          const cleanNick = String(rawNick).trim().replace(/^score-.*$/, '');
+
+          if (cleanNick && !cleanNick.startsWith('seed-') && !cleanNick.startsWith('score-')) {
+            const key = cleanNick.toLowerCase();
+            const existing = existingPlayers.get(key);
+            const score = (data && data.score) ? parseInt(data.score, 10) : zScore;
+            const ts = (data && data.timestamp) ? parseInt(data.timestamp, 10) : Date.now();
+            if (!existing || score > existing.score) {
+              existingPlayers.set(key, { nickname: cleanNick, score, timestamp: ts });
+            }
+          }
+        }
       }
+
+      // 3. Fusionar con puntuaciones locales / iniciales
+      this.localScores.forEach(s => {
+        const cleanNick = (s.nickname || '').trim();
+        if (!cleanNick || cleanNick.startsWith('score-')) return;
+        const key = cleanNick.toLowerCase();
+        const existing = existingPlayers.get(key);
+        if (!existing || s.score > existing.score) {
+          existingPlayers.set(key, { nickname: cleanNick, score: s.score, timestamp: s.timestamp || Date.now() });
+        }
+      });
+
+      // 4. Limpiar set legacy y reconstruir limpio con claves únicas
+      const cleanPipe = this.redis.pipeline();
+      cleanPipe.del('leaderboard:all_time');
+
+      for (const [key, p] of existingPlayers.entries()) {
+        cleanPipe.zadd('leaderboard:all_time', p.score, key);
+        cleanPipe.hset(`player:${key}`, {
+          id: key,
+          nickname: p.nickname,
+          score: p.score.toString(),
+          timestamp: p.timestamp.toString()
+        });
+      }
+
+      await cleanPipe.exec();
+      console.log(`✅ [Redis] Leaderboard normalizado con ${existingPlayers.size} jugadores únicos.`);
     } catch (err) {
-      console.warn('⚠️ [Redis] Error en sincronización inicial:', err.message);
+      console.warn('⚠️ [Redis] Error en normalización inicial:', err.message);
     }
   }
 
@@ -152,40 +200,70 @@ export class StorageManager {
       try {
         const todayKey = this.getTodayKey();
         
-        // 1. Top Histórico con ZREVRANGE
-        const allTimeMembers = await this.redis.zrevrange('leaderboard:all_time', 0, limit - 1);
+        // 1. Top Histórico con ZREVRANGE y WITHSCORES
+        const allTimeMembers = await this.redis.zrevrange('leaderboard:all_time', 0, limit - 1, 'WITHSCORES');
         let allTime = [];
         if (allTimeMembers.length > 0) {
           const pipeAll = this.redis.pipeline();
-          allTimeMembers.forEach(m => pipeAll.hgetall(`player:${m}`));
+          for (let i = 0; i < allTimeMembers.length; i += 2) {
+            const m = allTimeMembers[i];
+            pipeAll.hgetall(`player:${m}`);
+            pipeAll.hgetall(`score:${m}`);
+          }
           const allResults = await pipeAll.exec();
-          allTime = allResults.map(([err, data], idx) => {
-            if (err || !data || !data.nickname) return null;
-            return {
-              id: data.id || `p-${allTimeMembers[idx]}`,
-              nickname: data.nickname,
-              score: parseInt(data.score, 10),
-              timestamp: parseInt(data.timestamp, 10) || Date.now()
-            };
-          }).filter(Boolean);
+          
+          let resIdx = 0;
+          for (let i = 0; i < allTimeMembers.length; i += 2) {
+            const m = allTimeMembers[i];
+            const zScore = parseInt(allTimeMembers[i + 1], 10) || 0;
+            const [errP, dataP] = allResults[resIdx++];
+            const [errS, dataS] = allResults[resIdx++];
+            const data = (dataP && dataP.nickname) ? dataP : ((dataS && dataS.nickname) ? dataS : null);
+
+            const nick = (data && data.nickname) ? data.nickname : m;
+            const score = (data && data.score) ? parseInt(data.score, 10) : zScore;
+            const ts = (data && data.timestamp) ? parseInt(data.timestamp, 10) : Date.now();
+
+            allTime.push({
+              id: m,
+              nickname: nick,
+              score,
+              timestamp: ts
+            });
+          }
         }
 
-        // 2. Top Hoy con ZREVRANGE
-        const todayMembers = await this.redis.zrevrange(todayKey, 0, limit - 1);
+        // 2. Top Hoy con ZREVRANGE y WITHSCORES
+        const todayMembers = await this.redis.zrevrange(todayKey, 0, limit - 1, 'WITHSCORES');
         let today = [];
         if (todayMembers.length > 0) {
           const pipeToday = this.redis.pipeline();
-          todayMembers.forEach(m => pipeToday.hgetall(`player_today:${todayKey}:${m}`));
+          for (let i = 0; i < todayMembers.length; i += 2) {
+            const m = todayMembers[i];
+            pipeToday.hgetall(`player_today:${todayKey}:${m}`);
+            pipeToday.hgetall(`player:${m}`);
+          }
           const todayResults = await pipeToday.exec();
-          today = todayResults.map(([err, data], idx) => {
-            if (err || !data || !data.nickname) return null;
-            return {
-              id: data.id || `pt-${todayMembers[idx]}`,
-              nickname: data.nickname,
-              score: parseInt(data.score, 10),
-              timestamp: parseInt(data.timestamp, 10) || Date.now()
-            };
-          }).filter(Boolean);
+          
+          let resIdx = 0;
+          for (let i = 0; i < todayMembers.length; i += 2) {
+            const m = todayMembers[i];
+            const zScore = parseInt(todayMembers[i + 1], 10) || 0;
+            const [errPT, dataPT] = todayResults[resIdx++];
+            const [errP, dataP] = todayResults[resIdx++];
+            const data = (dataPT && dataPT.nickname) ? dataPT : ((dataP && dataP.nickname) ? dataP : null);
+
+            const nick = (data && data.nickname) ? data.nickname : m;
+            const score = (data && data.score) ? parseInt(data.score, 10) : zScore;
+            const ts = (data && data.timestamp) ? parseInt(data.timestamp, 10) : Date.now();
+
+            today.push({
+              id: m,
+              nickname: nick,
+              score,
+              timestamp: ts
+            });
+          }
         } else {
           const oneDayMs = 24 * 60 * 60 * 1000;
           const now = Date.now();
