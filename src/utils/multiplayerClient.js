@@ -16,9 +16,18 @@ class MultiplayerClient {
     this.disconnect();
     this.callbacks = callbacks;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
-    const wsUrl = `${protocol}//${host}`;
+    let wsUrl = import.meta.env.VITE_WS_URL;
+    if (!wsUrl) {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      if (backendUrl) {
+        wsUrl = backendUrl.replace(/^http/, 'ws');
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const host = isLocal ? 'localhost:3001' : window.location.host;
+        wsUrl = `${protocol}//${host}`;
+      }
+    }
 
     try {
       this.ws = new WebSocket(wsUrl);

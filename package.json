@@ -13,6 +13,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
     "phaser": "^4.2.1",
+    "serverless-http": "^4.0.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {

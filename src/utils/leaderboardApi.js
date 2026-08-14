@@ -54,9 +54,18 @@ export function isMultiplayerActive() {
   return getGameMode() === 'multiplayer';
 }
 
+export function getApiBaseUrl() {
+  const envBackend = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+  if (envBackend) {
+    return envBackend.replace(/\/+$/, '') + (envBackend.endsWith('/api') ? '' : '/api');
+  }
+  return '/api';
+}
+
 export async function fetchActiveRooms() {
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch('/api/rooms');
+    const res = await fetch(`${base}/rooms`);
     if (!res.ok) throw new Error('Network error');
     const data = await res.json();
     return data.success ? data.rooms : [];
@@ -67,8 +76,9 @@ export async function fetchActiveRooms() {
 }
 
 export async function fetchLeaderboard() {
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch('/api/leaderboard');
+    const res = await fetch(`${base}/leaderboard`);
     if (!res.ok) throw new Error('Network error');
     return await res.json();
   } catch (err) {
@@ -89,8 +99,9 @@ export async function fetchLeaderboard() {
 
 export async function submitScore(score, durationMs) {
   const nickname = getStoredNickname();
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch('/api/score', {
+    const res = await fetch(`${base}/score`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
