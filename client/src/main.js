@@ -8,7 +8,8 @@ import {
   fetchLeaderboard,
   fetchActiveRooms,
   getGameMode,
-  setGameMode
+  setGameMode,
+  submitScore
 } from './utils/leaderboardApi.js';
 import { multiplayer } from './utils/multiplayerClient.js';
 
@@ -214,7 +215,12 @@ function setupUI() {
       const newNick = setStoredNickname(nickInput.value);
       if (displayNick) displayNick.textContent = newNick;
       profileModal.close();
-      renderLeaderboards();
+      const hs = parseInt(localStorage.getItem('homer_bird_highscore') || '0', 10);
+      if (hs > 0) {
+        submitScore(hs, hs * 1300).then(() => loadLeaderboard()).catch(() => {});
+      } else {
+        renderLeaderboards();
+      }
       restartPhaserScene();
     });
   }
@@ -232,10 +238,17 @@ function setupUI() {
   if (mobTabAllTime) mobTabAllTime.addEventListener('click', () => setTab('allTime'));
   if (mobTabToday) mobTabToday.addEventListener('click', () => setTab('today'));
 
-  // Carga inicial
+  // Carga inicial y sincronización de récords locales pendientes a la base de datos
   loadLeaderboard();
   loadActiveRooms();
   window.addEventListener('leaderboard-updated', () => loadLeaderboard());
+
+  const localHighScore = parseInt(localStorage.getItem('homer_bird_highscore') || '0', 10);
+  if (localHighScore > 0) {
+    submitScore(localHighScore, localHighScore * 1300).then(() => {
+      loadLeaderboard();
+    }).catch(() => {});
+  }
 }
 
 async function loadActiveRooms() {
