@@ -1,7 +1,7 @@
 # 🍩 Homer Bird • Springfield Sector 7-G Arcade
 
 <p align="center">
-  <img src="public/icons/icon-192.png" alt="Homer Bird Logo" width="128" style="border-radius: 24px;" />
+  <img src="client/public/icons/icon-192.png" alt="Homer Bird Logo" width="128" style="border-radius: 24px;" />
 </p>
 
 <p align="center">
@@ -9,9 +9,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Phaser-3.88-blue?logo=phaser&logoColor=white" alt="Phaser 3" />
-  <img src="https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Phaser-4.2-blue?logo=phaser&logoColor=white" alt="Phaser" />
+  <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/Node.js-Express%20%2B%20WebSockets-green?logo=node.js&logoColor=white" alt="Node.js" />
+  <img src="https://img.shields.io/badge/Bun-Compatible-fbf0df?logo=bun&logoColor=black" alt="Bun" />
   <img src="https://img.shields.io/badge/PWA-100%25%20Offline-orange?logo=pwa&logoColor=white" alt="PWA" />
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License" />
 </p>
@@ -30,99 +31,90 @@
   - Spritesheet de vuelo continuo y aleteo.
   - Spritesheet de impacto/derrota con expresiones de pánico y choque.
 - **📱 Responsive & PWA Offline:**
-  - **Móviles (`<= 768px`):** Pantalla completa real edge-to-edge (`100dvh` / `100vw`) sin barras negras.
+  - **Móviles (`<= 768px`):** Pantalla completa real edge-to-edge (`100dvh` / `100vw`) con controles táctiles optimizados.
   - **Desktop (`> 768px`):** Cabina arcade temática *Sector 7-G* de la Planta Nuclear con líneas CRT, telemetría LED del reactor y monitor de peligro meltdown.
   - **PWA:** Instalable en Android, iOS, Windows y macOS; funciona 100% sin conexión a internet.
 - **🔊 Audio Dinámico:**
-  - Efectos de voz originales de Homero Simpson con modulación de velocidad (+20%), corte instantáneo al aletear y audio de derrota.
+  - Efectos de voz originales de Homero Simpson con modulación de velocidad, corte instantáneo al aletear y audio de derrota.
 
 ---
 
-## 🛠️ Stack Tecnológico
+## 🛠️ Arquitectura Desacoplada (Frontend & Backend)
 
-| Capa | Tecnología |
-| :--- | :--- |
-| **Motor de Juego** | [Phaser 3](https://phaser.io/) (Arcade Physics + TileSprites) |
-| **Frontend Tooling** | [Vite](https://vitejs.dev/) |
-| **Backend API** | [Express](https://expressjs.com/) (Node.js / Bun) |
-| **Multijugador** | [ws](https://github.com/websockets/ws) (WebSockets nativo ultra ligero) |
-| **Audio** | HTML5 Audio & Web Audio API |
-| **Estilos** | CSS3 Vanilla con diseño industrial Sector 7-G |
-
----
-
-## 📁 Estructura del Proyecto
+El proyecto está estructurado como un monorrepósito limpio con dos servicios independientes:
 
 ```text
-├── assets/                  # Spritesheets, audios y fondos originales
-├── data/                    # Persistencia de puntuaciones (JSON / SQLite)
-├── public/                  # Assets estáticos servidos por Vite y PWA
-│   ├── icons/               # Favicons, apple-touch-icon y splash icons
-│   ├── manifest.webmanifest # Manifiesto PWA instalable
-│   └── sw.js                # Service Worker con caché offline
-├── server/
-│   └── server.js            # Servidor API REST + Servidor WebSockets
-├── src/
-│   ├── main.js              # Inicialización de Phaser y controladores UI
-│   ├── scenes/
-│   │   ├── BootScene.js     # Carga de assets y registro de animaciones
-│   │   └── GameScene.js     # Lógica de juego, físicas y peers multijugador
-│   └── utils/
-│       ├── leaderboardApi.js    # Cliente API de ranking e identidad
-│       ├── multiplayerClient.js # Cliente WebSocket de salas
-│       ├── soundFx.js           # Sintetizador de audio de respaldo
-│       └── textureGenerator.js  # Generador de texturas procedurales
-├── .env.example             # Plantilla de variables de entorno
-├── index.html               # Layout arcade y modales
-├── style.css                # Sistema de diseño Springfield Sector 7-G
-└── vite.config.js           # Configuración de proxy y puerto Vite
+homer-brd/
+├── client/                     # FRONTEND (Phaser + Vite PWA)
+│   ├── public/                 # Favicons, audios, sprites y manifest PWA
+│   ├── src/                    # Escenas de juego, UI y clientes API/WS
+│   ├── index.html
+│   ├── style.css
+│   ├── vite.config.js
+│   └── package.json            # Dependencias exclusivas de frontend
+│
+├── server/                     # BACKEND (Express + WebSockets + Anti-Cheat)
+│   ├── data/                   # Persistencia de puntuaciones (scores.json)
+│   ├── server.js               # API REST (/api/leaderboard, /api/score) y WS
+│   ├── Dockerfile              # Contenedor universal para despliegue
+│   └── package.json            # Dependencias exclusivas de backend
+│
+├── package.json                # Workspaces y orquestación local
+└── netlify.toml                # Configuración de despliegue estático para client/
 ```
 
 ---
 
-## 🚀 Instalación y Ejecución Local
+## 🚀 Inicio Rápido en Desarrollo Local
 
-### 1. Clonar el repositorio
+### 1. Instalar dependencias
 ```bash
-git clone https://github.com/tu-usuario/homer-bird.git
-cd homer-bird
-```
+# Con Bun (Recomendado):
+bun install
 
-### 2. Instalar dependencias
-```bash
+# O con npm:
 npm install
 ```
 
-### 3. Configurar entorno
-Copia la plantilla de entorno:
+### 2. Ejecutar ambos servicios en paralelo
 ```bash
-cp .env.example .env
+bun dev
+# o npm run dev
 ```
-
-### 4. Iniciar servidores
-En una terminal, arranca el servidor backend (API & WebSockets):
-```bash
-npm run server
-```
-
-En otra terminal, arranca el cliente web (Vite):
-```bash
-npm run dev
-```
-
-Abre tu navegador en 👉 **`http://localhost:5174/`** (o el puerto que indique Vite).
+Esto levantará simultáneamente:
+- **Backend API & WebSockets**: `http://localhost:3001`
+- **Frontend Arcade Client**: `http://localhost:5173`
 
 ---
 
-## 📦 Compilación para Producción
+## 💻 Comandos Individuales
 
-```bash
-# Generar bundle optimizado en dist/
-npm run build
+| Acción | Comando |
+| :--- | :--- |
+| **Solo Cliente (Dev)** | `bun run dev:client` |
+| **Solo Servidor (Dev)** | `bun run dev:server` |
+| **Build de Producción Cliente** | `bun run build` |
+| **Iniciar Servidor de Producción** | `bun run start` |
 
-# Previsualizar bundle de producción
-npm run preview
-```
+---
+
+## 🌐 Despliegue en Producción
+
+### Frontend (Client)
+El cliente es una SPA estática y PWA que puede alojarse en:
+- **Netlify / Vercel / Cloudflare Pages / GitHub Pages**:
+  - Directorio base / Root: `client`
+  - Build command: `bun run build` (o `npm run build`)
+  - Publish directory: `dist`
+  - Variables de entorno en la plataforma:
+    - `VITE_API_URL=https://tu-backend.com/api`
+    - `VITE_WS_URL=wss://tu-backend.com`
+
+### Backend (Server)
+El backend requiere soporte de conexiones WebSocket persistentes:
+- **Render / Railway / Fly.io / VPS Docker**:
+  - Usar el `Dockerfile` incluido en `server/` o configurar comando `node server.js` dentro de `server/`.
+  - Configurar variable de entorno `CORS_ORIGIN=https://tu-frontend.netlify.app`.
 
 ---
 

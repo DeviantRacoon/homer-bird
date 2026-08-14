@@ -16,6 +16,14 @@ class MultiplayerClient {
     this.disconnect();
     this.callbacks = callbacks;
 
+    const cleanRoomCode = (roomCode || '').trim().toUpperCase();
+    if (!cleanRoomCode) {
+      if (this.callbacks.onNoRoomSelected) {
+        this.callbacks.onNoRoomSelected();
+      }
+      return;
+    }
+
     let wsUrl = import.meta.env.VITE_WS_URL;
     if (!wsUrl) {
       const backendUrl = import.meta.env.VITE_BACKEND_URL;
@@ -50,7 +58,7 @@ class MultiplayerClient {
         this.isConnected = true;
         this.ws.send(JSON.stringify({
           type: 'join_room',
-          roomCode: roomCode || 'SPRINGFIELD',
+          roomCode: cleanRoomCode,
           nickname
         }));
       };
@@ -90,10 +98,13 @@ class MultiplayerClient {
         this.playerId = msg.playerId;
         this.seed = msg.seed;
         this.status = msg.status || 'WAITING';
+        this.isReady = false;
         this.peers.clear();
         if (msg.players) {
           msg.players.forEach(p => {
-            if (p.id !== this.playerId) this.peers.set(p.id, p);
+            if (p.id !== this.playerId) {
+              this.peers.set(p.id, { ...p, isReady: p.isReady || false });
+            }
           });
         }
         if (this.callbacks.onRoomJoined) {
@@ -101,8 +112,35 @@ class MultiplayerClient {
         }
         break;
 
+      case 'player_ready':
+        if (msg.id === this.playerId) {
+          this.isReady = true;
+        } else {
+          const peer = this.peers.get(msg.id);
+          if (peer) peer.isReady = true;
+        }
+        if (this.callbacks.onPlayerReady) {
+          this.callbacks.onPlayerReady(msg);
+        }
+        break;
+
+      case 'countdown_started':
+        this.status = 'COUNTDOWN';
+        if (msg.seed) this.seed = msg.seed;
+        if (this.callbacks.onCountdownStarted) {
+          this.callbacks.onCountdownStarted(msg);
+        }
+        break;
+
+      case 'countdown_tick':
+        if (this.callbacks.onCountdownTick) {
+          this.callbacks.onCountdownTick(msg);
+        }
+        break;
+
       case 'game_started':
         this.status = 'PLAYING';
+        if (msg.seed) this.seed = msg.seed;
         if (this.callbacks.onGameStarted) {
           this.callbacks.onGameStarted(msg);
         }
@@ -111,7 +149,11 @@ class MultiplayerClient {
       case 'room_reset':
         this.status = 'WAITING';
         this.seed = msg.seed;
-        this.peers.forEach(p => { p.isAlive = true; });
+        this.isReady = false;
+        this.peers.forEach(p => { 
+          p.isAlive = true;
+          p.isReady = false;
+        });
         if (this.callbacks.onRoomReset) {
           this.callbacks.onRoomReset(msg);
         }
@@ -119,7 +161,7 @@ class MultiplayerClient {
 
       case 'player_joined':
         if (msg.player && msg.player.id !== this.playerId) {
-          this.peers.set(msg.player.id, msg.player);
+          this.peers.set(msg.player.id, { ...msg.player, isReady: msg.player.isReady || false });
           if (this.callbacks.onPlayerJoined) this.callbacks.onPlayerJoined(msg.player);
         }
         break;
@@ -158,9 +200,10 @@ class MultiplayerClient {
     }
   }
 
-  startGame() {
+  sendReady() {
+    this.isReady = true;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'start_game' }));
+      this.ws.send(JSON.stringify({ type: 'player_ready' }));
     }
   }
 

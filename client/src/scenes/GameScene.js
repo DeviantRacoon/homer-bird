@@ -22,6 +22,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.gameState = 'READY'; // READY | PLAYING | GAMEOVER
+    this.isReady = false;
     this.score = 0;
     this.highScore = parseInt(localStorage.getItem('homer_bird_highscore') || '0', 10);
     this.lastPosSentTime = 0;
@@ -109,10 +110,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   initMultiplayer(gameW, gameH) {
-    const roomCode = localStorage.getItem('homer_bird_room_code') || 'SPRINGFIELD';
+    const roomCode = localStorage.getItem('homer_bird_room_code');
+    if (!roomCode) {
+      if (this.instructText) {
+        this.instructText.setText('SELECCIONA O CREA UNA SALA\nEN EL PANEL LATERAL');
+      }
+      return;
+    }
     const nickname = getStoredNickname();
 
     multiplayer.connect(roomCode, nickname, {
+      onNoRoomSelected: () => {
+        if (this.instructText) {
+          this.instructText.setText('SELECCIONA O CREA UNA SALA\nEN EL PANEL LATERAL');
+        }
+      },
       onJoinError: (err) => {
         if (this.statusText) {
           this.statusText.setText(`⚠️ ${err.code === 'SERVERLESS_WS_UNSUPPORTED' ? 'MODO OFFLINE' : 'SALA BLOQUEADA'}`);
@@ -137,23 +149,74 @@ export class GameScene extends Phaser.Scene {
         if (msg.players) {
           msg.players.forEach(p => this.addPeerSprite(p, gameW, gameH));
         }
+        this.updateReadyUI();
       },
       onPlayerJoined: (player) => {
         this.addPeerSprite(player, gameW, gameH);
+        this.updateReadyUI();
+      },
+      onPlayerReady: (msg) => {
+        const peer = this.peerSprites.get(msg.id);
+        if (peer && peer.sprite) {
+          peer.sprite.play('homer-jump');
+          peer.sprite.once('animationcomplete', () => {
+            if (this.gameState === 'READY' || this.gameState === 'COUNTDOWN') peer.sprite.play('homer-fly');
+          });
+        }
+        this.updateReadyUI();
+      },
+      onCountdownStarted: (msg) => {
+        if (msg.seed) {
+          this.rng = createSeededRandom(msg.seed);
+        }
+        this.gameState = 'COUNTDOWN';
+        if (this.readyContainer) this.readyContainer.setVisible(false);
+        this.showCountdownNumber('3', '#fed90f');
+      },
+      onCountdownTick: (msg) => {
+        const count = msg.count;
+        const colors = { 2: '#facc15', 1: '#fb923c' };
+        this.showCountdownNumber(String(count), colors[count] || '#fed90f');
+      },
+      onGameStarted: (msg) => {
+        if (msg.seed) {
+          this.rng = createSeededRandom(msg.seed);
+        }
+        this.showCountdownNumber('¡A VOLAR!', '#4ade80');
+        this.time.delayedCall(600, () => {
+          if (this.countdownText) this.countdownText.setVisible(false);
+        });
+        if (this.gameState === 'READY' || this.gameState === 'COUNTDOWN') {
+          this.startGame();
+        }
+      },
+      onRoomReset: (msg) => {
+        this.isReady = false;
+        this.gameState = 'READY';
+        if (this.countdownText) this.countdownText.setVisible(false);
+        if (this.readyContainer) this.readyContainer.setVisible(true);
+        if (msg.seed) {
+          this.rng = createSeededRandom(msg.seed);
+        }
+        this.updateReadyUI();
       },
       onPlayerPos: (data) => {
         const peer = this.peerSprites.get(data.id);
         if (peer) {
           peer.targetY = data.y;
           peer.targetAngle = data.a;
-          if (peer.tag) peer.tag.setText(`${peer.nickname} (${data.score || 0})`);
+          if (peer.tag && this.gameState === 'PLAYING') {
+            peer.tag.setText(`${peer.nickname} (${data.score || 0})`);
+          }
         }
       },
       onPlayerJump: (id) => {
         const peer = this.peerSprites.get(id);
         if (peer && peer.sprite) {
           peer.sprite.play('homer-jump');
-          peer.sprite.once('animationcomplete', () => peer.sprite.play('homer-fly'));
+          peer.sprite.once('animationcomplete', () => {
+            if (peer.sprite) peer.sprite.play('homer-fly');
+          });
         }
       },
       onPlayerDied: (data) => {
@@ -172,6 +235,7 @@ export class GameScene extends Phaser.Scene {
           if (peer.tag) peer.tag.destroy();
           this.peerSprites.delete(id);
         }
+        this.updateReadyUI();
       }
     });
   }
@@ -186,9 +250,13 @@ export class GameScene extends Phaser.Scene {
     sprite.play('homer-fly');
     sprite.setDepth(8);
 
-    const tag = this.add.text(sprite.x, sprite.y - 24, `${player.nickname} (${player.score || 0})`, {
+    const initialTag = this.gameState === 'READY'
+      ? `${player.nickname} (${player.isReady ? '✅ LISTO' : '⏳ ESPERANDO'})`
+      : `${player.nickname} (${player.score || 0})`;
+
+    const tag = this.add.text(sprite.x, sprite.y - 24, initialTag, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '8px',
+      fontSize: '9px',
       color: '#f8fafc',
       stroke: '#0f172a',
       strokeThickness: 3
@@ -201,6 +269,37 @@ export class GameScene extends Phaser.Scene {
       targetY: sprite.y,
       targetAngle: 0
     });
+  }
+
+  updateReadyUI() {
+    if (!isMultiplayerActive() || !this.instructText || this.gameState !== 'READY') return;
+
+    const roomCode = localStorage.getItem('homer_bird_room_code');
+    if (!roomCode) {
+      this.instructText.setText('SELECCIONA O CREA UNA SALA\nEN EL PANEL LATERAL');
+      this.instructText.setColor('#ffffff');
+      return;
+    }
+
+    let readyCount = this.isReady ? 1 : 0;
+    this.peerSprites.forEach((peer, id) => {
+      const peerData = multiplayer.peers.get(id);
+      const isPeerReady = peerData?.isReady || false;
+      if (isPeerReady) readyCount++;
+      if (peer.tag) {
+        peer.tag.setText(`${peer.nickname} (${isPeerReady ? '✅ LISTO' : '⏳ ESPERANDO'})`);
+      }
+    });
+
+    const totalCount = 1 + this.peerSprites.size;
+
+    if (this.isReady) {
+      this.instructText.setText(`SALA: ${roomCode}\n¡LISTO! ESPERANDO A TODOS...\n(${readyCount}/${totalCount} LISTOS)`);
+      this.instructText.setColor('#4ade80');
+    } else {
+      this.instructText.setText(`SALA: ${roomCode}\nSALTA PARA ESTAR LISTO\n(${readyCount}/${totalCount} LISTOS)`);
+      this.instructText.setColor('#ffffff');
+    }
   }
 
   initAudio() {
@@ -229,7 +328,7 @@ export class GameScene extends Phaser.Scene {
     // Marcador central
     this.scoreText = this.add.text(gameW / 2, 65, '0', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '34px',
+      fontSize: '36px',
       color: '#ffffff',
       stroke: '#0f172a',
       strokeThickness: 6
@@ -240,20 +339,26 @@ export class GameScene extends Phaser.Scene {
     const modeLabel = isMultiplayerActive() ? '🌐 MULTIJUGADOR EN VIVO' : '🕹️ MODO SOLO';
     const titleText = this.add.text(0, -65, 'HOMER BIRD', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '22px',
+      fontSize: '24px',
       color: '#facc15',
       stroke: '#0f172a',
       strokeThickness: 5
     }).setOrigin(0.5);
 
     const subText = this.add.text(0, -35, modeLabel, {
-      fontFamily: 'Chivo Mono, monospace',
+      fontFamily: '"Press Start 2P", monospace',
       fontSize: '10px',
-      fontWeight: '900',
       color: '#38bdf8'
     }).setOrigin(0.5);
 
-    const instructText = this.add.text(0, 130, 'TOCA O ESPACIO\nPARA VOLAR', {
+    const savedRoom = localStorage.getItem('homer_bird_room_code');
+    const defaultInstruct = isMultiplayerActive()
+      ? (savedRoom
+          ? `SALA: ${savedRoom}\nSALTA PARA ESTAR LISTO\n(0/1 LISTOS)`
+          : 'SELECCIONA O CREA UNA SALA\nEN EL PANEL LATERAL')
+      : 'TOCA O ESPACIO\nPARA VOLAR';
+
+    this.instructText = this.add.text(0, 130, defaultInstruct, {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: '13px',
       color: '#ffffff',
@@ -263,7 +368,7 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 4
     }).setOrigin(0.5);
 
-    this.readyContainer.add([titleText, subText, instructText]);
+    this.readyContainer.add([titleText, subText, this.instructText]);
 
     // Pantalla Game Over
     this.gameOverContainer = this.add.container(gameW / 2, gameH * 0.46).setDepth(30).setVisible(false);
@@ -276,7 +381,7 @@ export class GameScene extends Phaser.Scene {
 
     const goTitle = this.add.text(0, -90, 'D\'OH!', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '26px',
+      fontSize: '28px',
       color: '#ef4444',
       stroke: '#ffffff',
       strokeThickness: 3
@@ -284,26 +389,26 @@ export class GameScene extends Phaser.Scene {
 
     this.finalScoreText = this.add.text(0, -40, 'SCORE: 0', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '13px',
+      fontSize: '14px',
       color: '#f8fafc'
     }).setOrigin(0.5);
 
     this.bestScoreText = this.add.text(0, -10, 'BEST: 0', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '13px',
+      fontSize: '14px',
       color: '#facc15'
     }).setOrigin(0.5);
 
     this.statusText = this.add.text(0, 20, isMultiplayerActive() ? '🌐 MULTIJUGADOR' : '', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '9px',
+      fontSize: '10px',
       color: '#38bdf8',
       align: 'center'
     }).setOrigin(0.5);
 
     this.restartBtn = this.add.text(0, 72, 'JUGAR DE NUEVO', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '11px',
+      fontSize: '12px',
       color: '#ffffff',
       backgroundColor: '#22c55e',
       padding: { x: 14, y: 10 }
@@ -315,6 +420,45 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.gameOverContainer.add([panelBg, goTitle, this.finalScoreText, this.bestScoreText, this.statusText, this.restartBtn]);
+
+    // 4. Texto de Cuenta Regresiva Sincronizada (3, 2, 1... ¡YA!)
+    this.countdownText = this.add.text(gameW / 2, gameH * 0.36, '', {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '44px',
+      color: '#facc15',
+      stroke: '#0f172a',
+      strokeThickness: 8,
+      align: 'center'
+    }).setOrigin(0.5).setDepth(45).setVisible(false);
+  }
+
+  showCountdownNumber(text, color = '#facc15') {
+    if (!this.countdownText) return;
+    this.countdownText.setText(text);
+    this.countdownText.setColor(color);
+    this.countdownText.setScale(0.4);
+    this.countdownText.setAlpha(1);
+    this.countdownText.setVisible(true);
+
+    this.tweens.killTweensOf(this.countdownText);
+    this.tweens.add({
+      targets: this.countdownText,
+      scale: 1.25,
+      duration: 280,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: this.countdownText,
+          scale: 1.0,
+          alpha: 0.85,
+          duration: 350
+        });
+      }
+    });
+
+    try {
+      sounds.point();
+    } catch {}
   }
 
   update(time, delta) {
@@ -367,8 +511,44 @@ export class GameScene extends Phaser.Scene {
   }
 
   flap() {
+    if (this.gameState === 'COUNTDOWN') {
+      this.playHomerSound();
+      return;
+    }
+
     if (this.gameState === 'READY') {
-      this.startGame();
+      if (!isMultiplayerActive()) {
+        this.startGame();
+        return;
+      }
+
+      // En multijugador, verificar si ya se seleccionó una sala
+      const currentRoomCode = localStorage.getItem('homer_bird_room_code');
+      if (!currentRoomCode) {
+        this.playHomerSound();
+        const roomInput = document.getElementById('room-code-input') || document.getElementById('mob-room-code-input');
+        if (roomInput) roomInput.focus();
+        return;
+      }
+
+      // El salto confirma el estado "LISTO"
+      if (!this.isReady) {
+        this.isReady = true;
+        this.homer.play('homer-jump');
+        this.homer.once('animationcomplete', () => {
+          if (this.gameState === 'READY') this.homer.play('homer-fly');
+        });
+        this.playHomerSound();
+        multiplayer.sendReady();
+        this.updateReadyUI();
+      } else {
+        // Ya estaba listo, pero hace el efecto de aletazo visual
+        this.homer.play('homer-jump');
+        this.homer.once('animationcomplete', () => {
+          if (this.gameState === 'READY') this.homer.play('homer-fly');
+        });
+        this.playHomerSound();
+      }
       return;
     }
 
@@ -415,9 +595,10 @@ export class GameScene extends Phaser.Scene {
     this.readyContainer.setVisible(false);
     this.scoreText.setVisible(true);
 
-    if (isMultiplayerActive()) {
-      multiplayer.startGame();
-    }
+    // Actualizar etiquetas de rivales para mostrar puntajes en juego
+    this.peerSprites.forEach((peer) => {
+      if (peer.tag) peer.tag.setText(`${peer.nickname} (0)`);
+    });
 
     this.homer.body.allowGravity = true;
     this.homer.body.setGravityY(920);

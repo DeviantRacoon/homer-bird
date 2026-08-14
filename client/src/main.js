@@ -130,7 +130,12 @@ function setupUI() {
 
   // 3. Unirse a Salas
   function handleJoinRoom(code) {
-    const cleanCode = code.trim().toUpperCase() || 'SPRINGFIELD';
+    const cleanCode = (code || '').trim().toUpperCase();
+    if (!cleanCode) {
+      if (roomCodeInput) roomCodeInput.focus();
+      if (mobRoomCodeInput) mobRoomCodeInput.focus();
+      return;
+    }
     localStorage.setItem('homer_bird_room_code', cleanCode);
     setGameMode('multiplayer');
     updateModeUI('multiplayer');
@@ -143,10 +148,16 @@ function setupUI() {
 
   if (joinRoomBtn && roomCodeInput) {
     joinRoomBtn.addEventListener('click', () => handleJoinRoom(roomCodeInput.value));
+    roomCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleJoinRoom(roomCodeInput.value);
+    });
   }
 
   if (mobJoinRoomBtn && mobRoomCodeInput) {
     mobJoinRoomBtn.addEventListener('click', () => handleJoinRoom(mobRoomCodeInput.value));
+    mobRoomCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleJoinRoom(mobRoomCodeInput.value);
+    });
   }
 
   if (refreshRoomsBtn) refreshRoomsBtn.addEventListener('click', () => loadActiveRooms());

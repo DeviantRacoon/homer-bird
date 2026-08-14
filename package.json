@@ -1,21 +1,17 @@
 {
-  "name": "flappy-bird-clone",
+  "name": "homer-bird-monorepo",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "server": "node server/server.js",
-    "build": "vite build",
-    "start": "node server/server.js",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^4.22.2",
-    "phaser": "^4.2.1",
-    "serverless-http": "^4.0.0",
-    "vite": "^8.2.1",
-    "ws": "^8.21.3"
+    "dev": "bun --filter '*' dev",
+    "dev:client": "bun run --cwd client dev",
+    "dev:server": "bun run --cwd server dev",
+    "build": "bun run --cwd client build",
+    "start": "bun run --cwd server start"
   }
 }

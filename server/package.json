@@ -1,0 +1,17 @@
+{
+  "name": "homer-bird-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
+    "ioredis": "^5.4.2",
+    "ws": "^8.21.3"
+  }
+}
