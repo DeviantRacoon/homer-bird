@@ -60,12 +60,17 @@ export class GameScene extends Phaser.Scene {
     this.ceiling = this.add.zone(gameW / 2, -10, gameW, 20);
     this.physics.add.existing(this.ceiling, true);
 
-    // 4. Modo Multijugador en Vivo (WebSockets)
+    // 4. Interfaz & Audio (Crear UI primero para tener los contenedores y textos listos)
+    this.createUI();
+    this.initAudio();
+    this.syncDashboard();
+
+    // 5. Modo Multijugador en Vivo (WebSockets)
     if (isMultiplayerActive()) {
       this.initMultiplayer(gameW, gameH);
     }
 
-    // 5. Personaje Homero (Jugador Local)
+    // 6. Personaje Homero (Jugador Local)
     this.homer = this.physics.add.sprite(gameW * 0.25, gameH * 0.45, 'homer', 0);
     this.homer.setScale(0.24);
     this.homer.setCircle(70, 58, 60);
@@ -83,7 +88,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeInOut'
     });
 
-    // 6. Partículas
+    // 7. Partículas
     this.particles = this.add.particles(0, 0, 'particle-spark', {
       speed: { min: 80, max: 220 },
       scale: { start: 1, end: 0 },
@@ -92,20 +97,15 @@ export class GameScene extends Phaser.Scene {
       emitting: false
     }).setDepth(20);
 
-    // 7. Colisiones
+    // 8. Colisiones
     this.physics.add.collider(this.homer, this.ground, () => this.handleHitGround(), null, this);
     this.physics.add.collider(this.homer, this.ceiling, () => this.homer.setVelocityY(20), null, this);
     this.physics.add.overlap(this.homer, this.pipes, () => this.handleHitPipe(), null, this);
 
-    // 8. Controles
+    // 9. Controles
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     this.input.on('pointerdown', () => this.flap());
-
-    // 9. Interfaz & Audio
-    this.createUI();
-    this.initAudio();
-    this.syncDashboard();
   }
 
   initMultiplayer(gameW, gameH) {
@@ -114,18 +114,20 @@ export class GameScene extends Phaser.Scene {
 
     multiplayer.connect(roomCode, nickname, {
       onJoinError: (err) => {
-        this.statusText.setText(`⚠️ ${err.message || 'SALA BLOQUEADA'}`);
-        this.statusText.setColor('#ef4444');
+        if (this.statusText) {
+          this.statusText.setText(`⚠️ ${err.message || 'SALA BLOQUEADA'}`);
+          this.statusText.setColor('#ef4444');
+        }
         if (this.readyContainer) {
-          const banner = this.add.text(gameW / 2, gameH * 0.28, '⚠️ PARTIDA YA EN CURSO\nCREA OTRA SALA', {
+          const banner = this.add.text(gameW / 2, gameH * 0.28, `⚠️ ${err.message || 'SALA BLOQUEADA'}\nCAMBIA A MODO SOLO O CREA SALA`, {
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: '9px',
+            fontSize: '8px',
             color: '#ef4444',
             align: 'center',
             backgroundColor: '#1e1b4b',
             padding: { x: 8, y: 6 }
           }).setOrigin(0.5).setDepth(40);
-          this.time.delayedCall(4000, () => banner.destroy());
+          this.time.delayedCall(5000, () => banner.destroy());
         }
       },
       onRoomJoined: (msg) => {
