@@ -115,19 +115,21 @@ export class GameScene extends Phaser.Scene {
     multiplayer.connect(roomCode, nickname, {
       onJoinError: (err) => {
         if (this.statusText) {
-          this.statusText.setText(`⚠️ ${err.message || 'SALA BLOQUEADA'}`);
+          this.statusText.setText(`⚠️ ${err.code === 'SERVERLESS_WS_UNSUPPORTED' ? 'MODO OFFLINE' : 'SALA BLOQUEADA'}`);
           this.statusText.setColor('#ef4444');
         }
         if (this.readyContainer) {
-          const banner = this.add.text(gameW / 2, gameH * 0.28, `⚠️ ${err.message || 'SALA BLOQUEADA'}\nCAMBIA A MODO SOLO O CREA SALA`, {
+          const banner = this.add.text(gameW / 2, gameH * 0.28, `⚠️ ${err.message || 'SALA BLOQUEADA'}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '8px',
-            color: '#ef4444',
+            color: '#fef08a',
             align: 'center',
             backgroundColor: '#1e1b4b',
-            padding: { x: 8, y: 6 }
+            padding: { x: 10, y: 8 },
+            lineSpacing: 6,
+            wordWrap: { width: gameW - 48, useAdvancedWrap: true }
           }).setOrigin(0.5).setDepth(40);
-          this.time.delayedCall(5000, () => banner.destroy());
+          this.time.delayedCall(4500, () => banner.destroy());
         }
       },
       onRoomJoined: (msg) => {

@@ -28,11 +28,11 @@ class MultiplayerClient {
         } else {
           // Si estamos en un hosting serverless como Netlify sin backend configurado
           if (window.location.hostname.includes('netlify.app') || window.location.hostname.includes('vercel.app')) {
-            console.info('ℹ️ Netlify Serverless no soporta WebSockets persistentes. Configura VITE_BACKEND_URL para activar multijugador.');
+            console.info('ℹ️ Netlify Serverless no soporta WebSockets. Usa VITE_BACKEND_URL para conectar un servidor de juego.');
             if (this.callbacks.onJoinError) {
               this.callbacks.onJoinError({
                 code: 'SERVERLESS_WS_UNSUPPORTED',
-                message: 'Para jugar Multijugador en vivo en la nube, conecta un servidor WebSocket en Render/Railway.'
+                message: 'MULTIJUGADOR OFFLINE EN NETLIFY\n(USA MODO SOLO PARA JUGAR)'
               });
             }
             return;
