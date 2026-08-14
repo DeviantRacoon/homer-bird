@@ -15,6 +15,7 @@ const DATA_DIR = path.resolve(process.env.DATA_DIRECTORY || path.join(__dirname,
 const SCORES_FILE = path.join(DATA_DIR, 'scores.json');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 const rawCors = process.env.CORS_ORIGIN || '*';
@@ -88,8 +89,8 @@ function isRateLimited(ip) {
   const history = ipRateLimits.get(ip) || [];
   const validHistory = history.filter(t => now - t < 60000); // Ventana de 1 minuto
 
-  if (validHistory.length >= 10) {
-    return true; // Más de 10 envíos por minuto
+  if (validHistory.length >= 30) {
+    return true; // Máx 30 envíos por minuto por IP (suficiente para partidas arcade rápidas)
   }
 
   validHistory.push(now);
@@ -132,7 +133,7 @@ app.get('/api/leaderboard', async (req, res) => {
 
 // Guardar Puntuación con Validación Anti-Cheat
 app.post('/api/score', async (req, res) => {
-  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || req.socket.remoteAddress || 'unknown';
 
   if (isRateLimited(clientIp)) {
     return res.status(429).json({ success: false, error: 'Demasiadas peticiones. Intenta más tarde.' });
@@ -297,6 +298,21 @@ wss.on('connection', (ws) => {
           }
 
           currentRoom = targetRoom;
+
+          // Limpiar cualquier sesión anterior del mismo jugador o sockets huérfanos en la sala
+          for (const [existingId, existingPlayer] of currentRoom.players.entries()) {
+            if (
+              existingPlayer.nickname.trim().toLowerCase() === playerNick.trim().toLowerCase() ||
+              existingPlayer.ws === ws ||
+              existingPlayer.ws.readyState !== WebSocket.OPEN
+            ) {
+              console.log(`🧹 Eliminando sesión previa/fantasma de ${existingPlayer.nickname} (${existingId}) en sala ${roomCode}`);
+              try { existingPlayer.ws.close(); } catch (_) {}
+              currentRoom.players.delete(existingId);
+              broadcastToRoom(currentRoom, { type: 'player_left', id: existingId });
+            }
+          }
+
           const playerColor = PLAYER_COLORS[currentRoom.players.size % PLAYER_COLORS.length];
 
           const playerInfo = {

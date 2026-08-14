@@ -10,6 +10,10 @@ import {
   getGameMode,
   setGameMode
 } from './utils/leaderboardApi.js';
+import { multiplayer } from './utils/multiplayerClient.js';
+
+// Limpieza de cualquier sala previa guardada para que no conecte automáticamente
+localStorage.removeItem('homer_bird_room_code');
 
 function getGameDimensions() {
   const isMobile = window.innerWidth <= 768;
@@ -115,6 +119,11 @@ function setupUI() {
   updateModeUI(currentMode);
 
   function handleModeChange(mode) {
+    localStorage.removeItem('homer_bird_room_code');
+    multiplayer.disconnect();
+    if (roomCodeInput) roomCodeInput.value = '';
+    if (mobRoomCodeInput) mobRoomCodeInput.value = '';
+
     setGameMode(mode);
     updateModeUI(mode);
     restartPhaserScene();
@@ -128,7 +137,7 @@ function setupUI() {
   if (mobBtnSingle) mobBtnSingle.addEventListener('click', () => handleModeChange('single'));
   if (mobBtnMulti) mobBtnMulti.addEventListener('click', () => handleModeChange('multiplayer'));
 
-  // 3. Unirse a Salas
+  // 3. Unirse a Salas (Solo bajo acción explícita del usuario)
   function handleJoinRoom(code) {
     const cleanCode = (code || '').trim().toUpperCase();
     if (!cleanCode) {
@@ -136,7 +145,7 @@ function setupUI() {
       if (mobRoomCodeInput) mobRoomCodeInput.focus();
       return;
     }
-    localStorage.setItem('homer_bird_room_code', cleanCode);
+    multiplayer.roomCode = cleanCode;
     setGameMode('multiplayer');
     updateModeUI('multiplayer');
     restartPhaserScene();
@@ -276,15 +285,7 @@ async function loadActiveRooms() {
         if (roomCodeInput) roomCodeInput.value = code;
         if (mobRoomCodeInput) mobRoomCodeInput.value = code;
 
-        localStorage.setItem('homer_bird_room_code', code);
-        setGameMode('multiplayer');
-        restartPhaserScene();
-        loadActiveRooms();
-
-        const mobileHubModal = document.getElementById('mobile-arcade-hub-modal');
-        if (mobileHubModal && mobileHubModal.open) {
-          mobileHubModal.close();
-        }
+        handleJoinRoom(code);
       });
     });
   });

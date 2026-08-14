@@ -241,9 +241,15 @@ class MultiplayerClient {
 
   disconnect() {
     if (this.ws) {
-      this.ws.close();
+      try {
+        this.ws.close();
+      } catch (_) {}
       this.ws = null;
     }
+    this.roomCode = null;
+    this.playerId = null;
+    this.seed = null;
+    this.isReady = false;
     this.isConnected = false;
     this.peers.clear();
   }
