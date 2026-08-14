@@ -5,6 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--include=dev"
 
 # Redirección de la API REST a Netlify Serverless Functions
 [[redirects]]
