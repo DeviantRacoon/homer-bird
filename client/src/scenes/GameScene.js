@@ -79,6 +79,17 @@ export class GameScene extends Phaser.Scene {
     this.homer.play('homer-fly');
     this.homer.setDepth(15);
 
+    // Nametag flotante para el jugador local en la sala de espera
+    this.localTag = this.add.text(this.homer.x, this.homer.y - 26, '⭐ Tú', {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '8px',
+      color: '#f8fafc',
+      stroke: '#0f172a',
+      strokeThickness: 3,
+      backgroundColor: '#0f172ab3',
+      padding: { x: 5, y: 3 }
+    }).setOrigin(0.5).setDepth(16).setVisible(isMultiplayerActive());
+
     // Flotación en pantalla de inicio
     this.readyTween = this.tweens.add({
       targets: this.homer,
@@ -171,6 +182,40 @@ export class GameScene extends Phaser.Scene {
         }
         this.gameState = 'COUNTDOWN';
         if (this.readyContainer) this.readyContainer.setVisible(false);
+        if (this.localTag) this.localTag.setVisible(false);
+
+        // Mover a todos los jugadores ordenadamente a la línea de salida
+        this.tweens.add({
+          targets: this.homer,
+          x: gameW * 0.25,
+          y: gameH * 0.45,
+          duration: 300,
+          ease: 'Cubic.easeOut'
+        });
+
+        this.peerSprites.forEach((peer) => {
+          if (peer.sprite) {
+            this.tweens.add({
+              targets: peer.sprite,
+              x: gameW * 0.25,
+              y: gameH * 0.45,
+              duration: 300,
+              ease: 'Cubic.easeOut'
+            });
+          }
+          if (peer.tag) {
+            peer.tag.setText(`${peer.nickname} (0)`);
+            peer.tag.setColor('#f8fafc');
+            this.tweens.add({
+              targets: peer.tag,
+              x: gameW * 0.25,
+              y: gameH * 0.45 - 24,
+              duration: 300,
+              ease: 'Cubic.easeOut'
+            });
+          }
+        });
+
         this.showCountdownNumber('3', '#fed90f');
       },
       onCountdownTick: (msg) => {
@@ -195,6 +240,7 @@ export class GameScene extends Phaser.Scene {
         this.gameState = 'READY';
         if (this.countdownText) this.countdownText.setVisible(false);
         if (this.readyContainer) this.readyContainer.setVisible(true);
+        if (this.localTag) this.localTag.setVisible(true);
         if (msg.seed) {
           this.rng = createSeededRandom(msg.seed);
         }
@@ -245,29 +291,106 @@ export class GameScene extends Phaser.Scene {
 
     const sprite = this.add.sprite(gameW * 0.25, player.y || gameH * 0.45, 'homer', 0);
     sprite.setScale(0.24);
-    sprite.setAlpha(0.75);
+    sprite.setAlpha(0.85);
     if (player.color) sprite.setTint(player.color);
     sprite.play('homer-fly');
     sprite.setDepth(8);
 
     const initialTag = this.gameState === 'READY'
-      ? `${player.nickname} (${player.isReady ? '✅ LISTO' : '⏳ ESPERANDO'})`
+      ? `${player.isReady ? '✅' : '⏳'} ${player.nickname}`
       : `${player.nickname} (${player.score || 0})`;
 
-    const tag = this.add.text(sprite.x, sprite.y - 24, initialTag, {
+    const tag = this.add.text(sprite.x, sprite.y - 26, initialTag, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '9px',
-      color: '#f8fafc',
+      fontSize: '8px',
+      color: player.isReady ? '#4ade80' : '#f8fafc',
       stroke: '#0f172a',
-      strokeThickness: 3
+      strokeThickness: 3,
+      backgroundColor: '#0f172ab3',
+      padding: { x: 5, y: 3 }
     }).setOrigin(0.5).setDepth(9);
 
     this.peerSprites.set(player.id, {
+      id: player.id,
       sprite,
       tag,
       nickname: player.nickname,
+      color: player.color,
       targetY: sprite.y,
       targetAngle: 0
+    });
+
+    this.repositionLobbyAvatars();
+  }
+
+  repositionLobbyAvatars() {
+    if (this.gameState !== 'READY' || !isMultiplayerActive()) return;
+
+    const gameW = this.scale.width;
+    const gameH = this.scale.height;
+    const total = 1 + this.peerSprites.size;
+    const rowY = gameH * 0.28;
+
+    const peersList = Array.from(this.peerSprites.values());
+    const allAvatars = [
+      {
+        isLocal: true,
+        sprite: this.homer,
+        tag: this.localTag,
+        nickname: getStoredNickname() || 'Homero',
+        isReady: this.isReady
+      },
+      ...peersList.map(p => ({
+        isLocal: false,
+        sprite: p.sprite,
+        tag: p.tag,
+        nickname: p.nickname,
+        isReady: multiplayer.peers.get(p.id)?.isReady || false
+      }))
+    ];
+
+    allAvatars.forEach((p, idx) => {
+      let posX;
+      let posY = rowY + ((idx % 2 === 1) ? -10 : 8);
+
+      if (total === 1) {
+        posX = gameW * 0.5;
+        posY = rowY;
+      } else if (total === 2) {
+        posX = gameW * (idx === 0 ? 0.35 : 0.65);
+        posY = rowY;
+      } else if (total === 3) {
+        posX = gameW * (0.2 + idx * 0.3);
+      } else {
+        const spacing = (gameW * 0.72) / (total - 1);
+        posX = gameW * 0.14 + idx * spacing;
+      }
+
+      if (p.sprite) {
+        this.tweens.add({
+          targets: p.sprite,
+          x: posX,
+          y: posY,
+          duration: 250,
+          ease: 'Cubic.easeOut'
+        });
+      }
+
+      if (p.tag) {
+        p.tag.setVisible(true);
+        const statusIcon = p.isReady ? '✅' : '⏳';
+        const displayName = p.isLocal ? `${p.nickname} (Tú)` : p.nickname;
+        p.tag.setText(`${statusIcon} ${displayName}`);
+        p.tag.setColor(p.isReady ? '#4ade80' : '#f8fafc');
+
+        this.tweens.add({
+          targets: p.tag,
+          x: posX,
+          y: posY - 26,
+          duration: 250,
+          ease: 'Cubic.easeOut'
+        });
+      }
     });
   }
 
@@ -278,28 +401,36 @@ export class GameScene extends Phaser.Scene {
     if (!roomCode) {
       this.instructText.setText('SELECCIONA O CREA UNA SALA\nEN EL PANEL LATERAL');
       this.instructText.setColor('#ffffff');
+      if (this.localTag) this.localTag.setVisible(false);
       return;
     }
 
     let readyCount = this.isReady ? 1 : 0;
+    const peerRoster = [];
+
+    const localNick = getStoredNickname() || 'Homero';
+    peerRoster.push(`⭐ ${(localNick + ' (Tú)').slice(0, 14).padEnd(14, ' ')} ${this.isReady ? '✅ LISTO' : '⏳ ESPERA'}`);
+
     this.peerSprites.forEach((peer, id) => {
       const peerData = multiplayer.peers.get(id);
       const isPeerReady = peerData?.isReady || false;
       if (isPeerReady) readyCount++;
-      if (peer.tag) {
-        peer.tag.setText(`${peer.nickname} (${isPeerReady ? '✅ LISTO' : '⏳ ESPERANDO'})`);
-      }
+      const nick = (peer.nickname || 'Jugador').slice(0, 14).padEnd(14, ' ');
+      peerRoster.push(`👤 ${nick} ${isPeerReady ? '✅ LISTO' : '⏳ ESPERA'}`);
     });
 
     const totalCount = 1 + this.peerSprites.size;
+    const rosterLines = peerRoster.slice(0, 4).join('\n');
+    const callToAction = this.isReady ? '✅ ¡LISTO! ESPERANDO A TODOS...' : '👉 SALTA PARA ESTAR LISTO';
 
-    if (this.isReady) {
-      this.instructText.setText(`SALA: ${roomCode}\n¡LISTO! ESPERANDO A TODOS...\n(${readyCount}/${totalCount} LISTOS)`);
-      this.instructText.setColor('#4ade80');
-    } else {
-      this.instructText.setText(`SALA: ${roomCode}\nSALTA PARA ESTAR LISTO\n(${readyCount}/${totalCount} LISTOS)`);
-      this.instructText.setColor('#ffffff');
-    }
+    this.instructText.setText(
+      `SALA: ${roomCode} (${readyCount}/${totalCount} LISTOS)\n\n` +
+      `${rosterLines}\n\n` +
+      `${callToAction}`
+    );
+    this.instructText.setColor(this.isReady ? '#4ade80' : '#ffffff');
+
+    this.repositionLobbyAvatars();
   }
 
   initAudio() {
@@ -335,37 +466,39 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(20).setVisible(false);
 
     // Pantalla de Inicio / Ready
-    this.readyContainer = this.add.container(gameW / 2, gameH * 0.35).setDepth(20);
+    this.readyContainer = this.add.container(gameW / 2, gameH * 0.18).setDepth(20);
     const modeLabel = isMultiplayerActive() ? '🌐 MULTIJUGADOR EN VIVO' : '🕹️ MODO SOLO';
-    const titleText = this.add.text(0, -65, 'HOMER BIRD', {
+    const titleText = this.add.text(0, -40, 'HOMER BIRD', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '24px',
+      fontSize: '22px',
       color: '#facc15',
       stroke: '#0f172a',
       strokeThickness: 5
     }).setOrigin(0.5);
 
-    const subText = this.add.text(0, -35, modeLabel, {
+    const subText = this.add.text(0, -15, modeLabel, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '10px',
+      fontSize: '9px',
       color: '#38bdf8'
     }).setOrigin(0.5);
 
     const savedRoom = localStorage.getItem('homer_bird_room_code');
     const defaultInstruct = isMultiplayerActive()
       ? (savedRoom
-          ? `SALA: ${savedRoom}\nSALTA PARA ESTAR LISTO\n(0/1 LISTOS)`
+          ? `SALA: ${savedRoom} (0/1 LISTOS)\n\n⭐ Homero (Tú)  ⏳ ESPERA\n\n👉 SALTA PARA ESTAR LISTO`
           : 'SELECCIONA O CREA UNA SALA\nEN EL PANEL LATERAL')
       : 'TOCA O ESPACIO\nPARA VOLAR';
 
-    this.instructText = this.add.text(0, 130, defaultInstruct, {
+    this.instructText = this.add.text(0, 205, defaultInstruct, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '13px',
+      fontSize: '9px',
       color: '#ffffff',
       align: 'center',
-      lineSpacing: 10,
+      lineSpacing: 8,
       stroke: '#0f172a',
-      strokeThickness: 4
+      strokeThickness: 3,
+      backgroundColor: '#0f172ae0',
+      padding: { x: 14, y: 12 }
     }).setOrigin(0.5);
 
     this.readyContainer.add([titleText, subText, this.instructText]);
