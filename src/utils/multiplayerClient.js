@@ -22,10 +22,24 @@ class MultiplayerClient {
       if (backendUrl) {
         wsUrl = backendUrl.replace(/^http/, 'ws');
       } else {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const host = isLocal ? 'localhost:3001' : window.location.host;
-        wsUrl = `${protocol}//${host}`;
+        if (isLocal) {
+          wsUrl = `ws://localhost:3001`;
+        } else {
+          // Si estamos en un hosting serverless como Netlify sin backend configurado
+          if (window.location.hostname.includes('netlify.app') || window.location.hostname.includes('vercel.app')) {
+            console.info('ℹ️ Netlify Serverless no soporta WebSockets persistentes. Configura VITE_BACKEND_URL para activar multijugador.');
+            if (this.callbacks.onJoinError) {
+              this.callbacks.onJoinError({
+                code: 'SERVERLESS_WS_UNSUPPORTED',
+                message: 'Para jugar Multijugador en vivo en la nube, conecta un servidor WebSocket en Render/Railway.'
+              });
+            }
+            return;
+          }
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${protocol}//${window.location.host}`;
+        }
       }
     }
 
