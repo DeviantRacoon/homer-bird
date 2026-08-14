@@ -1,5 +1,19 @@
 // WebSocket Multiplayer Client with Room Locking & Error Handling
 
+export function normalizeWsUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  let clean = url.trim();
+  if (/^wss?:\/\//i.test(clean)) {
+    return clean.replace(/\/+$/, '');
+  }
+  if (/^https?:\/\//i.test(clean)) {
+    return clean.replace(/^http/i, 'ws').replace(/\/+$/, '');
+  }
+  const isLocal = clean.includes('localhost') || clean.includes('127.0.0.1');
+  const proto = isLocal ? 'ws' : 'wss';
+  return `${proto}://${clean.replace(/\/+$/, '')}`;
+}
+
 class MultiplayerClient {
   constructor() {
     this.ws = null;
@@ -24,30 +38,24 @@ class MultiplayerClient {
       return;
     }
 
-    let wsUrl = import.meta.env.VITE_WS_URL;
-    if (!wsUrl) {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
-      if (backendUrl) {
-        wsUrl = backendUrl.replace(/^http/, 'ws');
+    let wsUrl = '';
+    const rawWs = import.meta.env.VITE_WS_URL;
+    const rawBackend = import.meta.env.VITE_BACKEND_URL;
+    const rawApi = import.meta.env.VITE_API_URL;
+
+    if (rawWs) {
+      wsUrl = normalizeWsUrl(rawWs);
+    } else if (rawBackend) {
+      wsUrl = normalizeWsUrl(rawBackend);
+    } else if (rawApi && !rawApi.startsWith('/')) {
+      wsUrl = normalizeWsUrl(rawApi.replace(/\/api\/?$/, ''));
+    } else {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        wsUrl = 'ws://localhost:3001';
       } else {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocal) {
-          wsUrl = `ws://localhost:3001`;
-        } else {
-          // Si estamos en un hosting serverless como Netlify sin backend configurado
-          if (window.location.hostname.includes('netlify.app') || window.location.hostname.includes('vercel.app')) {
-            console.info('ℹ️ Netlify Serverless no soporta WebSockets. Usa VITE_BACKEND_URL para conectar un servidor de juego.');
-            if (this.callbacks.onJoinError) {
-              this.callbacks.onJoinError({
-                code: 'SERVERLESS_WS_UNSUPPORTED',
-                message: 'MULTIJUGADOR OFFLINE EN NETLIFY\n(USA MODO SOLO PARA JUGAR)'
-              });
-            }
-            return;
-          }
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          wsUrl = `${protocol}//${window.location.host}`;
-        }
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}`;
       }
     }
 

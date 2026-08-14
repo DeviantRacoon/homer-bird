@@ -54,11 +54,30 @@ export function isMultiplayerActive() {
   return getGameMode() === 'multiplayer';
 }
 
-export function getApiBaseUrl() {
-  const envBackend = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
-  if (envBackend) {
-    return envBackend.replace(/\/+$/, '') + (envBackend.endsWith('/api') ? '' : '/api');
+export function normalizeHttpUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  let clean = url.trim();
+  if (clean === '/api' || clean.startsWith('/')) return clean;
+  if (!/^https?:\/\//i.test(clean)) {
+    clean = `https://${clean}`;
   }
+  return clean.replace(/\/+$/, '');
+}
+
+export function getApiBaseUrl() {
+  const backend = import.meta.env.VITE_BACKEND_URL;
+  const apiUrl = import.meta.env.VITE_API_URL;
+
+  if (backend) {
+    const base = normalizeHttpUrl(backend);
+    return base.endsWith('/api') ? base : `${base}/api`;
+  }
+
+  if (apiUrl) {
+    const clean = normalizeHttpUrl(apiUrl);
+    return clean.endsWith('/api') || clean.startsWith('/') ? clean : `${clean}/api`;
+  }
+
   return '/api';
 }
 
