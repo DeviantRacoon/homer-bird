@@ -441,14 +441,21 @@ export class GameScene extends Phaser.Scene {
 
     const totalCount = 1 + this.peerSprites.size;
     const rosterLines = peerRoster.slice(0, 4).join('\n');
-    const callToAction = this.isReady ? '✅ ¡LISTO! ESPERANDO A TODOS...' : '👉 SALTA PARA ESTAR LISTO';
+    let callToAction = '';
+    if (totalCount < 2) {
+      callToAction = this.isReady
+        ? '✅ LISTO\n⏳ ESPERANDO RIVAL (MÍN. 2 JUGADORES)'
+        : '👉 SALTA PARA ESTAR LISTO\n⏳ ESPERANDO RIVAL (MÍN. 2)';
+    } else {
+      callToAction = this.isReady ? '✅ ¡LISTO! ESPERANDO A TODOS...' : '👉 SALTA PARA ESTAR LISTO';
+    }
 
     this.instructText.setText(
       `SALA: ${roomCode} (${readyCount}/${totalCount} LISTOS)\n\n` +
       `${rosterLines}\n\n` +
       `${callToAction}`
     );
-    this.instructText.setColor(this.isReady ? '#4ade80' : '#ffffff');
+    this.instructText.setColor(this.isReady && totalCount >= 2 ? '#4ade80' : '#ffffff');
 
     this.repositionLobbyAvatars();
   }
@@ -515,7 +522,7 @@ export class GameScene extends Phaser.Scene {
     const localNick = getStoredNickname() || 'Homero';
     const defaultInstruct = isMultiplayerActive()
       ? (activeRoom
-          ? `SALA: ${activeRoom} (0/1 LISTOS)\n\n⭐ ${(localNick + ' (Tú)').slice(0, 14).padEnd(14, ' ')} ⏳ ESPERA\n\n👉 SALTA PARA ESTAR LISTO`
+          ? `SALA: ${activeRoom} (0/1 LISTOS)\n\n⭐ ${(localNick + ' (Tú)').slice(0, 14).padEnd(14, ' ')} ⏳ ESPERA\n\n⏳ ESPERANDO RIVAL (MÍN. 2)`
           : 'SALA MULTIJUGADOR\n\n👉 INGRESA O SELECCIONA UNA SALA\nEN EL PANEL DERECHO')
       : 'TOCA O ESPACIO\nPARA VOLAR';
 

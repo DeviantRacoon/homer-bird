@@ -382,8 +382,8 @@ wss.on('connection', (ws) => {
               totalPlayers
             });
 
-            // Si todos los jugadores en la sala están listos, iniciar cuenta regresiva sincronizada (3, 2, 1...)
-            const allReady = totalPlayers > 0 && Array.from(currentRoom.players.values()).every(p => p.isReady);
+            // Si todos los jugadores en la sala están listos y hay al menos 2 jugadores, iniciar cuenta regresiva sincronizada (3, 2, 1...)
+            const allReady = totalPlayers >= 2 && Array.from(currentRoom.players.values()).every(p => p.isReady);
             if (allReady) {
               startRoomCountdown(currentRoom);
             }
@@ -483,10 +483,10 @@ wss.on('connection', (ws) => {
           seed: currentRoom.seed
         });
       } else if (currentRoom.status === 'WAITING') {
-        // Verificar si los restantes están todos listos
+        // Verificar si los restantes están todos listos (mínimo 2 jugadores)
         const readyPlayers = Array.from(currentRoom.players.values()).filter(p => p.isReady).length;
         const totalPlayers = currentRoom.players.size;
-        const allReady = totalPlayers > 0 && Array.from(currentRoom.players.values()).every(p => p.isReady);
+        const allReady = totalPlayers >= 2 && Array.from(currentRoom.players.values()).every(p => p.isReady);
         if (allReady) {
           startRoomCountdown(currentRoom);
         }

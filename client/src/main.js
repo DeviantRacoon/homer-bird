@@ -13,8 +13,9 @@ import {
 } from './utils/leaderboardApi.js';
 import { multiplayer } from './utils/multiplayerClient.js';
 
-// Limpieza de cualquier sala previa guardada para que no conecte automáticamente
+// Limpieza de cualquier sala o modo previo para arrancar siempre en modo solo por default
 localStorage.removeItem('homer_bird_room_code');
+setGameMode('single');
 
 function getGameDimensions() {
   const isMobile = window.innerWidth <= 768;
