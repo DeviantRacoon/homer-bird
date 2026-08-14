@@ -22,9 +22,20 @@ const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 // 1. SEGURIDAD HTTP & SANITIZACIÓN
 // ==============================================================================
 
+// Habilitar CORS universal (permite Netlify, localhost y cualquier dominio)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(cors({
-  origin: true,
-  methods: ['GET', 'POST']
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS']
 }));
 
 // Límite estricto de tamaño para evitar ataques de denegación de servicio por memoria
